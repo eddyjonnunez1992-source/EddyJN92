@@ -1,0 +1,6 @@
+{
+  "name": "Remix: Spatial Comic Nexus",
+  "description": "A 3D generative comic creator and reader with interactive GLSL displacement maps and AI-powered panel synthesis.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
