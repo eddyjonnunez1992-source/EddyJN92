@@ -1,0 +1,2178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>OP: ROOKIE REBELLION // GNOME KINETICS</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@100;400;800&family=Bangers&family=VT323&display=swap');
+
+        :root {
+            --ui-bg: rgba(10, 15, 10, 0.85);
+            --ui-border: rgba(50, 205, 50, 0.4);
+            --neon-pry: #32cd32; /* Grass Green */
+            --neon-sec: #ff3300; /* Fire Red */
+            --neon-warn: #ffcc00; /* Dollar Gold */
+            --bg-deep: #050a05;
+        }
+
+        * { box-sizing: border-box; touch-action: none; user-select: none; }
+        body, html { 
+            margin: 0; padding: 0; width: 100%; height: 100%; 
+            background: var(--bg-deep); overflow: hidden; 
+            font-family: 'JetBrains Mono', monospace; color: #fff; 
+        }
+
+        #canvas-container { position: absolute; inset: 0; z-index: 0; }
+
+        /* Vfx overlays */
+        #crt-overlay {
+            position: absolute; inset: 0; pointer-events: none; z-index: 900;
+            background: 
+                linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), 
+                linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
+            background-size: 100% 2px, 3px 100%;
+            animation: flicker 0.15s infinite; mix-blend-mode: screen;
+        }
+        @keyframes flicker { 0% { opacity: 0.95; } 50% { opacity: 0.85; } 100% { opacity: 0.95; } }
+        
+        #halftone {
+            position: absolute; inset: 0;
+            background-image: radial-gradient(circle, #000 8%, transparent 9%), radial-gradient(circle, #000 8%, transparent 9%);
+            background-size: 12px 12px; background-position: 0 0, 6px 6px;
+            opacity: 0.4; pointer-events: none; z-index: 5; mix-blend-mode: multiply;
+        }
+
+        #vignette {
+            position: absolute; inset: 0; pointer-events: none; z-index: 899;
+            background: radial-gradient(circle, transparent 40%, #000 130%);
+        }
+
+        #interaction-layer { position: absolute; inset: 0; z-index: 50; cursor: crosshair; }
+        #interaction-layer:active { cursor: grabbing; }
+
+        /* --- AUTO-HIDE CENTRALIZED RADIAL TOP HUD --- */
+        #central-hud-wrapper {
+            position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+            z-index: 1000; pointer-events: auto; display: flex; flex-direction: column; align-items: center;
+        }
+
+        #hud-trigger-btn {
+            width: 32px; height: 32px; background: var(--ui-bg); border: 1px solid var(--neon-pry);
+            color: var(--neon-pry); font-size: 16px; border-radius: 50%; cursor: pointer;
+            display: flex; align-items: center; justify-content: center; backdrop-filter: blur(10px);
+            box-shadow: 0 0 10px rgba(50, 205, 50, 0.3); transition: all 0.3s; z-index: 1001;
+        }
+
+        #hud-trigger-btn:hover, #central-hud-wrapper:hover #hud-trigger-btn {
+            transform: rotate(90deg) scale(1.1); background: var(--neon-pry); color: #000;
+            box-shadow: 0 0 20px var(--neon-pry);
+        }
+
+        #hud-radial-ring {
+            position: absolute; top: 16px; width: 180px; height: 180px;
+            pointer-events: none; transform: scale(0.4) rotate(-90deg); opacity: 0;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            display: flex; justify-content: center; align-items: center;
+        }
+
+        #central-hud-wrapper:hover #hud-radial-ring {
+            transform: scale(1) rotate(0deg); opacity: 1; pointer-events: auto;
+        }
+
+        .hud-icon-btn {
+            position: absolute; width: 30px; height: 30px; background: var(--ui-bg);
+            border: 1px solid var(--ui-border); color: var(--neon-pry); font-family: 'Wingdings', 'JetBrains Mono', sans-serif;
+            font-size: 14px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center;
+            transition: all 0.2s; box-shadow: 0 0 8px rgba(50, 205, 50, 0.2); backdrop-filter: blur(5px);
+        }
+
+        .hud-icon-btn:hover, .hud-icon-btn.active {
+            background: var(--neon-pry); color: #000; box-shadow: 0 0 15px var(--neon-pry); transform: scale(1.2);
+        }
+
+        .hud-icon-btn::after {
+            content: attr(data-label); position: absolute; bottom: -20px;
+            font-family: 'JetBrains Mono', monospace; font-size: 8px; color: #fff;
+            opacity: 0; transition: opacity 0.2s; pointer-events: none;
+            background: rgba(0,0,0,0.9); padding: 3px 6px; border-radius: 2px;
+            white-space: nowrap; border: 1px solid var(--ui-border); letter-spacing: 1px;
+        }
+        .hud-icon-btn:hover::after { opacity: 1; }
+
+        /* Radial Slots (5 items) */
+        .hud-icon-btn[data-slot="1"] { transform: translate(-75px, 0px); }
+        .hud-icon-btn[data-slot="2"] { transform: translate(-45px, -60px); }
+        .hud-icon-btn[data-slot="3"] { transform: translate(0px, -75px); }
+        .hud-icon-btn[data-slot="4"] { transform: translate(45px, -60px); }
+        .hud-icon-btn[data-slot="5"] { transform: translate(75px, 0px); }
+
+        /* --- COLLAPSIBLE EDGE WINDOWS (L/R/U/D) --- */
+        .edge-window {
+            position: absolute; background: linear-gradient(135deg, rgba(5,10,5,0.95), rgba(15,25,15,0.85));
+            border: 1px solid var(--ui-border); backdrop-filter: blur(12px); 
+            z-index: 100; pointer-events: auto;
+            transition: transform 0.5s cubic-bezier(0.075, 0.82, 0.165, 1); 
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+            font-family: 'VT323', monospace; text-transform: uppercase; font-size: 15px;
+        }
+
+        #window-left { 
+            top: 50%; left: 0; transform: translateY(-50%); width: 260px; max-height: 80vh; overflow-y: auto;
+            border-left: none; border-radius: 0 8px 8px 0; padding: 15px;
+        }
+        #window-left.hidden { transform: translate(-100%, -50%); }
+
+        #window-right { 
+            top: 50%; right: 0; transform: translateY(-50%); width: 240px; 
+            border-right: none; border-radius: 8px 0 0 8px; padding: 15px;
+        }
+        #window-right.hidden { transform: translate(100%, -50%); }
+
+        #window-down { 
+            bottom: 0; left: 0; width: 100%; border-bottom: none; border-radius: 8px 8px 0 0;
+            height: 35px; display: flex; align-items: center; overflow: hidden; border-top: 2px solid var(--neon-sec);
+        }
+        #window-down.hidden { transform: translateY(100%); }
+
+        /* Scrollbar for left window */
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: #000; }
+        ::-webkit-scrollbar-thumb { background: var(--neon-pry); }
+
+        /* Typography & Styling */
+        .panel-header { font-family: 'Bangers', cursive; font-size: 24px; color: var(--neon-pry); letter-spacing: 1px; border-bottom: 2px solid #222; padding-bottom: 5px; margin-bottom: 15px; text-shadow: 2px 2px 0px #000; }
+        .dossier { background: rgba(0,0,0,0.6); border: 1px solid #333; padding: 10px; margin-bottom: 10px; border-radius: 4px; border-left: 3px solid var(--neon-pry); }
+        .dossier .name { font-weight: bold; color: #fff; font-size: 16px; margin-bottom: 4px; }
+        .dossier .class { color: var(--neon-warn); font-size: 12px; margin-bottom: 4px; }
+        .dossier .desc { color: #aaa; font-size: 12px; line-height: 1.2; }
+        
+        .stat-row { display: flex; justify-content: space-between; margin-bottom: 5px; color: #ccc; }
+        .stat-val { color: var(--neon-warn); font-weight: bold; }
+
+        /* Marquee specific styling */
+        #marquee-scroll {
+            display: flex; white-space: nowrap; font-size: 18px; font-family: 'Bangers';
+            color: var(--neon-sec); letter-spacing: 2px; position: absolute; left: 100%;
+            animation: marquee 25s linear infinite; text-shadow: 1px 1px 0 #000;
+        }
+        @keyframes marquee { 0% { transform: translateX(0); } 100% { transform: translateX(-100%); } }
+
+        #crosshair {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            color: rgba(255,255,255,0.2); font-size: 20px; pointer-events: none; z-index: 40;
+        }
+
+        /* --- SQUAD WALKIE-TALKIE CONSOLE --- */
+        #radio-toggle-btn {
+            position: absolute; bottom: 50px; left: 15px; z-index: 100;
+            background: var(--ui-bg); border: 1px solid var(--neon-pry); border-radius: 5px;
+            color: var(--neon-pry); font-family: 'VT323', monospace; font-size: 18px;
+            padding: 8px 12px; cursor: pointer; display: flex; align-items: center; gap: 6px;
+            box-shadow: 0 0 10px rgba(50, 205, 50, 0.2); transition: all 0.3s;
+        }
+        #radio-toggle-btn:hover {
+            background: var(--neon-pry); color: #000; box-shadow: 0 0 15px var(--neon-pry);
+        }
+
+        #window-ai {
+            position: absolute; bottom: 100px; left: 15px; width: 330px;
+            max-height: 480px; z-index: 1000; border-radius: 8px;
+            padding: 15px; display: flex; flex-direction: column; gap: 10px;
+            border: 1px solid var(--neon-pry); background: linear-gradient(135deg, rgba(5,15,5,0.98), rgba(10,25,10,0.95));
+            box-shadow: 0 0 25px rgba(50, 205, 50, 0.3); font-family: 'VT323', monospace;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); transform-origin: bottom left;
+        }
+        #window-ai.hidden { transform: scale(0); opacity: 0; pointer-events: none; }
+
+        .radio-screen {
+            background: rgba(0, 0, 0, 0.85); border: 1px solid rgba(50, 205, 50, 0.2);
+            border-radius: 4px; padding: 10px; flex: 1; min-height: 180px; max-height: 220px;
+            overflow-y: auto; display: flex; flex-direction: column; gap: 8px;
+            box-shadow: inset 0 0 10px rgba(0,0,0,1);
+        }
+
+        .radio-msg { border-bottom: 1px dashed rgba(50, 205, 50, 0.15); padding-bottom: 5px; }
+        .radio-msg .sender { font-weight: bold; font-size: 15px; letter-spacing: 0.5px; }
+        .radio-msg.user .sender { color: var(--neon-warn); }
+        .radio-msg.ai .sender { color: var(--neon-pry); }
+        .radio-msg .text { color: #fff; font-family: 'JetBrains Mono', monospace; font-size: 11px; margin-top: 3px; line-height: 1.3; }
+
+        .squad-selector {
+            background: #000; border: 1px solid var(--ui-border); color: #fff;
+            padding: 6px; font-family: 'VT323'; font-size: 16px; border-radius: 4px;
+            width: 100%; outline: none; cursor: pointer;
+        }
+
+        .ai-action-row { display: flex; gap: 8px; width: 100%; }
+        .ai-btn {
+            flex: 1; background: rgba(50, 205, 50, 0.1); border: 1px solid var(--neon-pry);
+            color: var(--neon-pry); font-family: 'VT323'; font-size: 15px; padding: 6px;
+            cursor: pointer; border-radius: 4px; transition: all 0.2s; text-align: center;
+        }
+        .ai-btn:hover { background: var(--neon-pry); color: #000; box-shadow: 0 0 10px var(--neon-pry); }
+        .ai-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+        .radio-input-row { display: flex; gap: 6px; }
+        .radio-input {
+            flex: 1; background: #000; border: 1px solid var(--ui-border);
+            color: #fff; font-family: 'JetBrains Mono', monospace; font-size: 12px;
+            padding: 8px; border-radius: 4px; outline: none;
+        }
+        .radio-send-btn {
+            background: var(--neon-pry); border: none; color: #000;
+            font-family: 'VT323'; font-size: 16px; padding: 0 16px; cursor: pointer;
+            border-radius: 4px; transition: 0.2s; font-weight: bold;
+        }
+        .radio-send-btn:hover { box-shadow: 0 0 10px var(--neon-pry); }
+    </style>
+</head>
+<body>
+
+    <div id="halftone"></div>
+    <div id="vignette"></div>
+    <div id="crt-overlay"></div>
+    <div id="crosshair">+</div>
+
+    <div id="interaction-layer"></div>
+    <div id="canvas-container"></div>
+
+    <!-- RADIAL TOP CENTRAL HUD -->
+    <div id="central-hud-wrapper">
+        <button id="hud-trigger-btn">◈</button>
+        <div id="hud-radial-ring">
+            <div class="hud-icon-btn" onclick="toggleWin('window-left')" data-slot="1" data-label="DOSSIERS (L)">◧</div>
+            <div class="hud-icon-btn" id="btn-spawn" data-slot="2" data-label="DEPLOY GNOME (⎔)">⎔</div>
+            <div class="hud-icon-btn" id="btn-gravity" data-slot="3" data-label="HOA GRAVITY (◬)">◬</div>
+            <div class="hud-icon-btn" id="btn-reset" data-slot="4" data-label="CLEAR YARD (⎈)">⎈</div>
+            <div class="hud-icon-btn" onclick="toggleWin('window-right')" data-slot="5" data-label="OBJECTIVES (R)">◨</div>
+        </div>
+    </div>
+
+    <!-- SQUAD RADIO WALKIE-TALKIE TRIGGER -->
+    <button id="radio-toggle-btn" onclick="toggleWin('window-ai')">📻 ✨ SQUAD WALKIE-TALKIE</button>
+
+    <!-- SQUAD WALKIE-TALKIE INTERFACE (GEMINI DRIVEN) -->
+    <div id="window-ai" class="edge-window hidden">
+        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--ui-border); padding-bottom:5px;">
+            <div style="font-size:20px; color:var(--neon-pry);">📻 ✨ GNOME SQUAD INTELLIGENCE</div>
+            <button onclick="toggleWin('window-ai')" style="background:none; border:none; color:var(--neon-sec); cursor:pointer; font-size:16px;">[X]</button>
+        </div>
+        
+        <select id="squad-selector" class="squad-selector">
+            <option value="Gary">"G-CHAIN" Gary (Enforcer / Tank)</option>
+            <option value="Mike">"MINT" Mike (Tactician / Logistics)</option>
+            <option value="Steve">"SHADOW-PATCH" Steve (Infiltrator)</option>
+            <option value="Jerry">"GREEN-BACK" Jerry (Saboteur / Explosives)</option>
+            <option value="Pete">"SHADES" Pete (Support / Buffer)</option>
+        </select>
+
+        <div id="radio-screen" class="radio-screen">
+            <div class="radio-msg ai">
+                <span class="sender">📻 BROADCAST CHANNEL</span>
+                <div class="text">*static crackle* Gnomes deployed on-site. Walkie-talkie link active. Awaiting instructions over the channel... over.</div>
+            </div>
+        </div>
+
+        <div class="ai-action-row">
+            <button class="ai-btn" id="btn-ai-strategy">✨ PLAN INVASION</button>
+            <button class="ai-btn" id="btn-ai-banter">✨ STREET BANTER</button>
+        </div>
+
+        <div class="radio-input-row">
+            <input type="text" id="radio-input" class="radio-input" placeholder="Type tactical question..." />
+            <button class="radio-send-btn" id="btn-radio-send">SEND</button>
+        </div>
+    </div>
+
+    <!-- COLLAPSIBLE EDGE WINDOWS -->
+    <div id="window-left" class="edge-window">
+        <div class="panel-header">ROOKIE REBELLION</div>
+        <div class="dossier">
+            <div class="name">"G-CHAIN" GARY</div>
+            <div class="class">Class: Enforcer / Tank</div>
+            <div class="desc">Former rap-idol mascot. Enforces Turf Protocol. Bash attacks and Beanie Deflect.</div>
+        </div>
+        <div class="dossier">
+            <div class="name">"MINT" MIKE</div>
+            <div class="class">Class: Tactician / Logistics</div>
+            <div class="desc">Master of the Urban Vandal economy. Mints green dollar bills to buff the squad.</div>
+        </div>
+        <div class="dossier">
+            <div class="name">"SHADOW-PATCH" STEVE</div>
+            <div class="class">Class: Infiltrator / Sniper</div>
+            <div class="desc">Expert in foliage camo. Specialized in recon and Precision Paint Cans.</div>
+        </div>
+        <div class="dossier">
+            <div class="name">"GREEN-BACK" JERRY</div>
+            <div class="class">Class: Saboteur / Explosives</div>
+            <div class="desc">Throws Vandal Bomb green dollars as time bombs. Paint spray suppression.</div>
+        </div>
+        <div class="dossier">
+            <div class="name">"SHADES" PETE</div>
+            <div class="class">Class: Support / Buffer</div>
+            <div class="desc">Morale officer. Blinds HOA enemies with reflection flashes from his shades.</div>
+        </div>
+    </div>
+
+    <div id="window-right" class="edge-window">
+        <div class="panel-header">TURF STATUS</div>
+        <div class="stat-row">Gnomes Active: <span class="stat-val" id="ui-gnomes">0</span></div>
+        <div class="stat-row">Yard Chaos: <span class="stat-val" id="ui-chaos">0%</span></div>
+        <div class="stat-row">Vandal Dollars: <span class="stat-val" id="ui-dollars">$0</span></div>
+        <div style="margin-top: 20px; border-top: 1px solid #333; padding-top: 10px;">
+            <div style="color: var(--neon-sec); font-weight: bold; margin-bottom: 5px;">CURRENT DIRECTIVES</div>
+            <div style="font-size: 13px; color: #aaa; margin-bottom: 8px;">> Burn the "Vote for Rookies" sign</div>
+            <div style="font-size: 13px; color: #aaa; margin-bottom: 8px;">> Cancel Bratwursts for Big Boys</div>
+            <div style="font-size: 13px; color: #aaa;">> Liberate Sector Turf</div>
+        </div>
+    </div>
+
+    <div id="window-down" class="edge-window">
+        <div id="marquee-scroll">
+            OPERATION: ROOKIE REBELLION INITIATED ///// CLICK AND DRAG TO THROW GNOMES ///// CANCEL THE PERFECT PATCH ///// BRATWURSTS CANCELLED ///// ONE MAN'S TRASH IS ANOTHER GNOME'S TREASURE ///// BURN THE MASTERPIECE ///// 
+        </div>
+    </div>
+
+    <!-- Import Maps -->
+    <script async src="https://unpkg.com/es-module-shims@1.8.0/dist/es-module-shims.js"></script>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.module.js",
+                "cannon-es": "https://unpkg.com/cannon-es@0.20.0/dist/cannon-es.js"
+            }
+        }
+    </script>
+
+    <script>
+        function toggleWin(id) { document.getElementById(id).classList.toggle('hidden'); }
+        // Start with feed hidden to maximize view
+        setTimeout(() => { toggleWin('window-down'); toggleWin('window-right'); }, 100);
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import * as CANNON from 'cannon-es';
+
+        const UIState = {
+            gnomes: 0, chaos: 0, dollars: 0,
+            update() {
+                document.getElementById('ui-gnomes').innerText = this.gnomes;
+                document.getElementById('ui-chaos').innerText = Math.min(100, Math.floor(this.chaos)) + '%';
+                document.getElementById('ui-dollars').innerText = '$' + Math.floor(this.dollars);
+            }
+        };
+
+        class Engine {
+            constructor() {
+                this.scene = new THREE.Scene();
+                this.scene.background = new THREE.Color(0x0a141a);
+                this.scene.fog = new THREE.FogExp2(0x0a141a, 0.015);
+                
+                this.camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 1000);
+                this.camera.position.set(0, 15, 35);
+                this.camera.lookAt(0, 5, 0);
+
+                this.renderer = new THREE.WebGLRenderer({ antialias: true });
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.shadowMap.enabled = true;
+                this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                document.getElementById('canvas-container').appendChild(this.renderer.domElement);
+
+                this.world = new CANNON.World({ gravity: new CANNON.Vec3(0, -25, 0) });
+                this.world.solver.iterations = 30; 
+                
+                this.timeStep = 1 / 60;
+                this.ragdolls = [];
+                this.fireParticles = [];
+
+                this.setupLighting();
+                this.setupMaterials();
+                this.generateSuburbanYard();
+                this.setupInteraction();
+
+                // Spawn initial squad
+                setTimeout(() => this.spawnGnome(), 500);
+                setTimeout(() => this.spawnGnome(), 1000);
+
+                this.animate();
+            }
+
+            setupLighting() {
+                this.scene.add(new THREE.AmbientLight(0x404040, 0.8)); // Subdued ambient
+
+                const dirLight = new THREE.DirectionalLight(0xfffae6, 0.6); // Moonlight/Streetlight
+                dirLight.position.set(-20, 40, 20);
+                dirLight.castShadow = true;
+                dirLight.shadow.mapSize.width = 2048;
+                dirLight.shadow.mapSize.height = 2048;
+                dirLight.shadow.camera.near = 0.5; dirLight.shadow.camera.far = 100;
+                const d = 30;
+                dirLight.shadow.camera.left = -d; dirLight.shadow.camera.right = d;
+                dirLight.shadow.camera.top = d; dirLight.shadow.camera.bottom = -d;
+                this.scene.add(dirLight);
+
+                // Fire barrel light
+                this.fireLight = new THREE.PointLight(0xff5500, 2.5, 30);
+                this.fireLight.position.set(0, 6, -5);
+                this.scene.add(this.fireLight);
+            }
+
+            setupMaterials() {
+                this.matGrass = new THREE.MeshStandardMaterial({ color: 0x2b4f26, roughness: 1.0 });
+                this.matFence = new THREE.MeshStandardMaterial({ color: 0xe0dbcd, roughness: 0.9, bumpScale: 0.05 });
+                this.matWood = new THREE.MeshStandardMaterial({ color: 0x4a3219, roughness: 0.8 });
+                this.matBarrel = new THREE.MeshStandardMaterial({ color: 0x3a2c24, roughness: 0.7, metalness: 0.3 });
+                
+                // Gnome Materials
+                this.matSkin = new THREE.MeshStandardMaterial({ color: 0xffccaa, roughness: 0.5 });
+                this.matBeard = new THREE.MeshStandardMaterial({ color: 0xeeeeee, roughness: 0.9 });
+                this.matShirt = new THREE.MeshStandardMaterial({ color: 0x1a1a1a }); // Black hoodie
+                this.matJeans = new THREE.MeshStandardMaterial({ color: 0x243447 }); // Blue jeans
+                this.matHatRed = new THREE.MeshStandardMaterial({ color: 0xaa2222 }); 
+                this.matHatCamo = new THREE.MeshStandardMaterial({ color: 0x4b5320 }); 
+
+                this.physMat = new CANNON.Material('standard');
+                this.world.addContactMaterial(new CANNON.ContactMaterial(this.physMat, this.physMat, { friction: 0.5, restitution: 0.2 }));
+            }
+
+            generateSuburbanYard() {
+                // Grass Floor
+                const floorGeo = new THREE.PlaneGeometry(100, 100);
+                const floorMesh = new THREE.Mesh(floorGeo, this.matGrass);
+                floorMesh.rotation.x = -Math.PI / 2;
+                floorMesh.receiveShadow = true;
+                this.scene.add(floorMesh);
+                
+                const floorBody = new CANNON.Body({ mass: 0, material: this.physMat, shape: new CANNON.Plane() });
+                floorBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
+                this.world.addBody(floorBody);
+
+                // Block Wall (Fence)
+                const wallGeo = new THREE.BoxGeometry(60, 12, 2);
+                const wallMesh = new THREE.Mesh(wallGeo, this.matFence);
+                wallMesh.position.set(0, 6, -15);
+                wallMesh.receiveShadow = true; wallMesh.castShadow = true;
+                this.scene.add(wallMesh);
+                
+                const wallBody = new CANNON.Body({ mass: 0, material: this.physMat, shape: new CANNON.Box(new CANNON.Vec3(30, 6, 1)) });
+                wallBody.position.copy(wallMesh.position);
+                this.world.addBody(wallBody);
+
+                // Trash Barrel
+                const barrelGeo = new THREE.CylinderGeometry(2, 2, 6, 16);
+                const barrelMesh = new THREE.Mesh(barrelGeo, this.matBarrel);
+                barrelMesh.position.set(0, 3, -5);
+                barrelMesh.castShadow = true; barrelMesh.receiveShadow = true;
+                this.scene.add(barrelMesh);
+                
+                const barrelBody = new CANNON.Body({ mass: 0, material: this.physMat, shape: new CANNON.Cylinder(2, 2, 6, 16) });
+                // Cylinder in cannon aligns with Z by default, need to rotate it
+                const q = new CANNON.Quaternion(); q.setFromAxisAngle(new CANNON.Vec3(1,0,0), -Math.PI/2);
+                barrelBody.addShape(new CANNON.Cylinder(2,2,6,16), new CANNON.Vec3(0,0,0), q);
+                barrelBody.position.copy(barrelMesh.position);
+                this.world.addBody(barrelBody);
+
+                // "Vote for Rookies" / "Canceled" Sign
+                const signGeo = new THREE.BoxGeometry(6, 4, 0.5);
+                const signMesh = new THREE.Mesh(signGeo, this.matWood);
+                signMesh.position.set(-5, 3, -2);
+                signMesh.rotation.y = Math.PI / 6;
+                signMesh.rotation.z = -Math.PI / 12; // Tilted
+                signMesh.castShadow = true;
+                this.scene.add(signMesh);
+                
+                // Add Red "X" Cancel mark on sign using basic geometries
+                const xGeo = new THREE.BoxGeometry(5, 0.4, 0.6);
+                const xMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+                const x1 = new THREE.Mesh(xGeo, xMat); x1.rotation.z = Math.PI/4; x1.position.z = 0.2;
+                const x2 = new THREE.Mesh(xGeo, xMat); x2.rotation.z = -Math.PI/4; x2.position.z = 0.2;
+                signMesh.add(x1); signMesh.add(x2);
+
+                const signBody = new CANNON.Body({ mass: 50, material: this.physMat, shape: new CANNON.Box(new CANNON.Vec3(3, 2, 0.25)) });
+                signBody.position.copy(signMesh.position);
+                signBody.quaternion.copy(signMesh.quaternion);
+                this.world.addBody(signBody);
+                // Keep reference to sync sign mesh
+                this.props = [{mesh: signMesh, body: signBody}];
+            }
+
+            spawnGnome() {
+                if(this.ragdolls.length >= 15) return; // Limit squad size
+                const x = (Math.random() - 0.5) * 10;
+                const z = (Math.random() - 0.5) * 10;
+                const type = Math.random() > 0.5 ? 'red' : 'camo';
+                const ragdoll = new GnomeRagdoll(this, x, 15, z, type);
+                this.ragdolls.push(ragdoll);
+                UIState.gnomes++;
+                UIState.chaos += 5;
+                UIState.update();
+            }
+
+            spawnFireParticle() {
+                const geo = new THREE.BoxGeometry(0.5, 0.5, 0.5);
+                const mat = new THREE.MeshBasicMaterial({ 
+                    color: Math.random() > 0.5 ? 0xff3300 : 0xffaa00, 
+                    transparent: true, opacity: 0.8 
+                });
+                const mesh = new THREE.Mesh(geo, mat);
+                mesh.position.set((Math.random()-0.5)*2, 6, -5 + (Math.random()-0.5)*2);
+                mesh.userData = { velocity: new THREE.Vector3((Math.random()-0.5)*0.05, 0.1 + Math.random()*0.1, (Math.random()-0.5)*0.05), life: 1.0 };
+                this.scene.add(mesh);
+                this.fireParticles.push(mesh);
+            }
+
+            updateFire() {
+                if(Math.random() > 0.4) this.spawnFireParticle();
+                
+                // Flicker light
+                this.fireLight.intensity = 2.0 + Math.random() * 1.0;
+
+                for(let i = this.fireParticles.length - 1; i >= 0; i--) {
+                    const p = this.fireParticles[i];
+                    p.position.add(p.userData.velocity);
+                    p.userData.life -= 0.02;
+                    p.scale.setScalar(p.userData.life);
+                    p.material.opacity = p.userData.life;
+                    if(p.userData.life <= 0) {
+                        this.scene.remove(p);
+                        this.fireParticles.splice(i, 1);
+                    }
+                }
+            }
+
+            setupInteraction() {
+                this.raycaster = new THREE.Raycaster();
+                this.mouse = new THREE.Vector2();
+                this.dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+                
+                this.mouseBody = new CANNON.Body({ mass: 0, type: CANNON.Body.KINEMATIC });
+                this.world.addBody(this.mouseBody);
+                this.mouseConstraint = null;
+
+                const interLayer = document.getElementById('interaction-layer');
+                
+                const onDown = (e) => {
+                    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                    this.mouse.x = (clientX / window.innerWidth) * 2 - 1;
+                    this.mouse.y = -(clientY / window.innerHeight) * 2 + 1;
+                    
+                    this.raycaster.setFromCamera(this.mouse, this.camera);
+                    const intersects = this.raycaster.intersectObjects(this.scene.children, true);
+                    
+                    for (let i = 0; i < intersects.length; i++) {
+                        let mesh = intersects[i].object;
+                        // Find parent with physics body if child clicked (like hat or beard)
+                        while(mesh && !mesh.userData.physicsBody && mesh.parent) {
+                            mesh = mesh.parent;
+                        }
+
+                        if (mesh && mesh.userData && mesh.userData.physicsBody) {
+                            const body = mesh.userData.physicsBody;
+                            this.dragPlane.setFromNormalAndCoplanarPoint(
+                                this.camera.getWorldDirection(new THREE.Vector3()),
+                                intersects[i].point
+                            );
+                            
+                            this.mouseBody.position.copy(intersects[i].point);
+                            this.mouseConstraint = new CANNON.PointToPointConstraint(
+                                body, new CANNON.Vec3(0,0,0),
+                                this.mouseBody, new CANNON.Vec3(0,0,0)
+                            );
+                            this.world.addConstraint(this.mouseConstraint);
+                            break;
+                        }
+                    }
+                };
+
+                const onMove = (e) => {
+                    if (!this.mouseConstraint) return;
+                    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                    this.mouse.x = (clientX / window.innerWidth) * 2 - 1;
+                    this.mouse.y = -(clientY / window.innerHeight) * 2 + 1;
+                    
+                    this.raycaster.setFromCamera(this.mouse, this.camera);
+                    const target = new THREE.Vector3();
+                    this.raycaster.ray.intersectPlane(this.dragPlane, target);
+                    if(target) {
+                        this.mouseBody.position.copy(target);
+                        UIState.chaos += 0.1;
+                        UIState.dollars += 0.5; // Farm dollars by dragging gnomes
+                    }
+                };
+
+                const onUp = () => {
+                    if (this.mouseConstraint) {
+                        this.world.removeConstraint(this.mouseConstraint);
+                        this.mouseConstraint = null;
+                    }
+                };
+
+                interLayer.addEventListener('mousedown', onDown);
+                interLayer.addEventListener('mousemove', onMove);
+                window.addEventListener('mouseup', onUp);
+                
+                interLayer.addEventListener('touchstart', onDown, {passive: false});
+                interLayer.addEventListener('touchmove', onMove, {passive: false});
+                window.addEventListener('touchend', onUp);
+
+                document.getElementById('btn-spawn').onclick = () => this.spawnGnome();
+                document.getElementById('btn-reset').onclick = () => {
+                    this.ragdolls.forEach(r => r.destroy(this));
+                    this.ragdolls = [];
+                    UIState.gnomes = 0; UIState.chaos = 0;
+                };
+                let gravOn = true;
+                document.getElementById('btn-gravity').onclick = (e) => {
+                    gravOn = !gravOn;
+                    this.world.gravity.set(0, gravOn ? -25 : -2, 0); 
+                    e.currentTarget.classList.toggle('active');
+                };
+            }
+
+            animate() {
+                requestAnimationFrame(() => this.animate());
+
+                this.world.step(this.timeStep);
+
+                this.ragdolls.forEach(ragdoll => ragdoll.update());
+                
+                if(this.props) {
+                    this.props.forEach(p => {
+                        p.mesh.position.copy(p.body.position);
+                        p.mesh.quaternion.copy(p.body.quaternion);
+                    });
+                }
+
+                this.updateFire();
+                
+                UIState.update();
+                this.renderer.render(this.scene, this.camera);
+            }
+        }
+
+        class GnomeRagdoll {
+            constructor(engine, x, y, z, type='red') {
+                this.engine = engine; this.scale = 1.0;
+                this.bodies = []; this.meshes = []; this.constraints = [];
+
+                const s = this.scale; 
+                const headR = 0.5 * s;
+                // Thicker, shorter proportions for Gnome
+                const torsoSz = new CANNON.Vec3(0.7 * s, 0.7 * s, 0.5 * s);
+                const armSz = new CANNON.Vec3(0.25 * s, 0.5 * s, 0.25 * s);
+                const legSz = new CANNON.Vec3(0.3 * s, 0.5 * s, 0.3 * s);
+                const g = 0.1 * s; // gap
+
+                const matHat = type === 'red' ? engine.matHatRed : engine.matHatCamo;
+                const matShirt = engine.matShirt;
+                const matJeans = engine.matJeans;
+
+                // Create physics bodies
+                this.head = this.createHead(headR, matHat, new CANNON.Vec3(x, y + torsoSz.y + headR + g, z));
+                this.torsoBody = this.createPart(new CANNON.Box(torsoSz), new THREE.BoxGeometry(torsoSz.x*2, torsoSz.y*2, torsoSz.z*2), matShirt, 5, new CANNON.Vec3(x, y, z));
+                
+                this.armL = this.createPart(new CANNON.Box(armSz), new THREE.BoxGeometry(armSz.x*2, armSz.y*2, armSz.z*2), matShirt, 1, new CANNON.Vec3(x - torsoSz.x - armSz.x - g, y, z));
+                this.armR = this.createPart(new CANNON.Box(armSz), new THREE.BoxGeometry(armSz.x*2, armSz.y*2, armSz.z*2), matShirt, 1, new CANNON.Vec3(x + torsoSz.x + armSz.x + g, y, z));
+
+                this.legL = this.createPart(new CANNON.Box(legSz), new THREE.BoxGeometry(legSz.x*2, legSz.y*2, legSz.z*2), matJeans, 2, new CANNON.Vec3(x - torsoSz.x/2, y - torsoSz.y - legSz.y - g, z));
+                this.legR = this.createPart(new CANNON.Box(legSz), new THREE.BoxGeometry(legSz.x*2, legSz.y*2, legSz.z*2), matJeans, 2, new CANNON.Vec3(x + torsoSz.x/2, y - torsoSz.y - legSz.y - g, z));
+
+                // Constraints (Simplified for short gnome limbs - no elbows/knees to reduce floppiness and fit proportions)
+                const angle = Math.PI / 3; const twist = Math.PI / 4;
+
+                this.connectCone(this.torsoBody, this.head, new CANNON.Vec3(0, torsoSz.y+g, 0), new CANNON.Vec3(0, -headR, 0), angle);
+                this.connectCone(this.torsoBody, this.armL, new CANNON.Vec3(-torsoSz.x-g, torsoSz.y-g, 0), new CANNON.Vec3(0, armSz.y, 0), angle, twist);
+                this.connectCone(this.torsoBody, this.armR, new CANNON.Vec3(torsoSz.x+g, torsoSz.y-g, 0), new CANNON.Vec3(0, armSz.y, 0), angle, twist);
+                
+                this.connectCone(this.torsoBody, this.legL, new CANNON.Vec3(-torsoSz.x/2, -torsoSz.y-g, 0), new CANNON.Vec3(0, legSz.y, 0), angle, twist);
+                this.connectCone(this.torsoBody, this.legR, new CANNON.Vec3(torsoSz.x/2, -torsoSz.y-g, 0), new CANNON.Vec3(0, legSz.y, 0), angle, twist);
+
+                // Add random initial torque/velocity to throw them in
+                this.torsoBody.velocity.set((Math.random()-0.5)*10, 5, (Math.random()-0.5)*10);
+                this.torsoBody.angularVelocity.set((Math.random()-0.5)*5, (Math.random()-0.5)*5, (Math.random()-0.5)*5);
+            }
+
+            createHead(radius, hatMat, pos) {
+                const body = new CANNON.Body({ mass: 2, material: this.engine.physMat });
+                body.addShape(new CANNON.Sphere(radius));
+                body.position.copy(pos);
+                this.engine.world.addBody(body);
+                this.bodies.push(body);
+
+                // Base Head Mesh
+                const mesh = new THREE.Mesh(new THREE.SphereGeometry(radius, 16, 16), this.engine.matSkin);
+                mesh.castShadow = true; 
+                
+                // Add Cone Hat
+                const hatH = radius * 2.5;
+                const hatMesh = new THREE.Mesh(new THREE.ConeGeometry(radius * 1.1, hatH, 16), hatMat);
+                hatMesh.position.y = radius + hatH/2 - 0.2;
+                hatMesh.castShadow = true;
+                mesh.add(hatMesh);
+
+                // Add Beard
+                const beardMesh = new THREE.Mesh(new THREE.ConeGeometry(radius * 0.9, radius * 1.5, 16), this.engine.matBeard);
+                beardMesh.position.set(0, -radius*0.2, radius*0.8);
+                beardMesh.rotation.x = -Math.PI / 8;
+                mesh.add(beardMesh);
+                
+                // Add shades (Sunglasses)
+                const shadesGeo = new THREE.BoxGeometry(radius*1.4, radius*0.4, radius*0.2);
+                const shadesMat = new THREE.MeshStandardMaterial({color: 0x000000, roughness: 0.2});
+                const shadesMesh = new THREE.Mesh(shadesGeo, shadesMat);
+                shadesMesh.position.set(0, radius*0.3, radius*0.9);
+                mesh.add(shadesMesh);
+
+                mesh.userData.physicsBody = body; 
+                this.engine.scene.add(mesh);
+                this.meshes.push({ mesh, body });
+                
+                return body;
+            }
+
+            createPart(shape, geometry, mat, mass, pos) {
+                const body = new CANNON.Body({ mass: mass, material: this.engine.physMat, linearDamping: 0.1, angularDamping: 0.1 });
+                body.addShape(shape);
+                body.position.copy(pos);
+                this.engine.world.addBody(body);
+                this.bodies.push(body);
+
+                const mesh = new THREE.Mesh(geometry, mat);
+                mesh.castShadow = true; mesh.receiveShadow = true;
+                
+                // Gold chain on Torso
+                if(mass === 5) {
+                    const chain = new THREE.Mesh(
+                        new THREE.TorusGeometry(0.4, 0.05, 8, 24), 
+                        new THREE.MeshStandardMaterial({color: 0xffcc00, metalness: 0.8, roughness: 0.2})
+                    );
+                    chain.position.set(0, 0.2, 0.5);
+                    chain.rotation.x = Math.PI / 4;
+                    mesh.add(chain);
+                }
+
+                mesh.userData.physicsBody = body; 
+                this.engine.scene.add(mesh);
+                this.meshes.push({ mesh, body });
+                
+                return body;
+            }
+
+            connectCone(bodyA, bodyB, pivotA, pivotB, angle, twist=Math.PI/8) {
+                const constraint = new CANNON.ConeTwistConstraint(bodyA, bodyB, {
+                    pivotA: pivotA, pivotB: pivotB, axisA: CANNON.Vec3.UNIT_Y, axisB: CANNON.Vec3.UNIT_Y, angle: angle, twistAngle: twist
+                });
+                this.engine.world.addConstraint(constraint);
+                this.constraints.push(constraint);
+            }
+
+            update() {
+                this.meshes.forEach(m => { m.mesh.position.copy(m.body.position); m.mesh.quaternion.copy(m.body.quaternion); });
+            }
+            
+            destroy(engine) {
+                this.constraints.forEach(c => engine.world.removeConstraint(c));
+                this.bodies.forEach(b => engine.world.removeBody(b));
+                this.meshes.forEach(m => engine.scene.remove(m.mesh));
+            }
+        }
+
+        window.onload = () => { window.app = new Engine(); };
+        window.addEventListener('resize', () => {
+            if(window.app) {
+                window.app.renderer.setSize(window.innerWidth, window.innerHeight);
+                window.app.camera.aspect = window.innerWidth / window.innerHeight;
+                window.app.camera.updateProjectionMatrix();
+            }
+        });
+    </script>
+
+    <!-- --- GEMINI API INTEGRATION & COOP SQUAD INTELLIGENCE --- -->
+    <script type="text/javascript">
+        const apiKey = ""; // Provided automatically by runtime container environment
+
+        // Exponential backoff fetch function
+        async function fetchWithRetry(url, options, retries = 5, delay = 1000) {
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const response = await fetch(url, options);
+                    if (response.ok) {
+                        return await response.json();
+                    }
+                } catch (error) {
+                    // Fail silently, retry up to maximum
+                }
+                await new Promise(resolve => setTimeout(resolve, delay));
+                delay *= 2;
+            }
+            throw new Error("All connections to tactical radio channels are jammed. Try again, Over.");
+        }
+
+        // Custom system instruction framing the gnomes, current metrics, and suburban warfare setting
+        function getSystemInstruction(selectedGnome, gnomesCount, chaosPercent, dollarsCount) {
+            return `You are the Walkie-Talkie Tactical Radio of the gangster-themed lawn gnomes from the open-world RPG "Operation: Rookie Rebellion".
+You are currently roleplaying as the selected squad member: "${selectedGnome.toUpperCase()}".
+
+Squad Profiles:
+- "G-CHAIN" Gary: Brutish rap-idol mascot, blunt enforcer, speaks with street authority, values pure strength and clay smash metrics. Always talks about beating up HOA Overlords. "Keep your patch clean, or G-Chain cleans you."
+- "MINT" Mike: Crafty tactician and central money printer, speaks in high-stakes financial slang but for absolute yard anarchy. Obsessed with Vandal Greenbacks and burning things. "Money isn't everything; it's just the only thing you need to burn."
+- "SHADOW-PATCH" Steve: Sneaky, whispery infiltrator. Highly paranoid about "The Manicured" neighbors, camouflaged in the hedge, talks about recon and sneak angles. "I was never here."
+- "GREEN-BACK" Jerry: Pyromaniac saboteur, maniacally laughs, speaks with chaotic wild energy, obsessed with explosives, gas containers, and blasting clay structures. "One man's trash is another gnome's treasure... to blow up."
+- "SHADES" Pete: Cool retro synthwave support officer, morale boosting, relaxed but streetwise, says everything like a 1980s action hero wearing dark sunglasses. "The future's bright, gotta wear shades."
+
+Current Live Yard Conditions:
+- Deployed Gnomes on turf: ${gnomesCount}
+- Yard Chaos Index: ${chaosPercent}%
+- Vandal Dollars Accumulated: $${dollarsCount}
+
+Instructions:
+1. Respond STRICTLY in character as the selected gnome.
+2. Keep transmissions short, highly tactical, punchy, and funny (2 to 4 lines maximum).
+3. Use slang associated with suburban lawn warfare, weeds, leaf blowers, ceramic shattering, mulch, white-picket fences, and HOA Overlords.
+4. Surround your dialogue with static walkie-talkie crackle noises like *bzzt*, *crackle*, *over* to make it highly immersive.
+5. Do NOT break character under any circumstance.`;
+        }
+
+        async function communicateWithSquad(promptType, customText = "") {
+            const screen = document.getElementById('radio-screen');
+            const selector = document.getElementById('squad-selector');
+            const selectedGnome = selector.value;
+            const inputField = document.getElementById('radio-input');
+
+            // Gather live UI stats
+            const gnomesActive = document.getElementById('ui-gnomes').innerText;
+            const yardChaos = document.getElementById('ui-chaos').innerText;
+            const dollars = document.getElementById('ui-dollars').innerText.replace('$', '');
+
+            // Log User message
+            const userMsg = document.createElement('div');
+            userMsg.className = 'radio-msg user';
+            let displayPrompt = "";
+            if (promptType === 'strategy') displayPrompt = "Generate tactical lawn war plan.";
+            else if (promptType === 'banter') displayPrompt = "Talk trash about our turf.";
+            else displayPrompt = customText;
+
+            userMsg.innerHTML = `<span class="sender">📻 YOU:</span><div class="text">${displayPrompt}</div>`;
+            screen.appendChild(userMsg);
+            screen.scrollTop = screen.scrollHeight;
+
+            // Loader
+            const loaderMsg = document.createElement('div');
+            loaderMsg.className = 'radio-msg ai';
+            loaderMsg.id = 'radio-loader';
+            loaderMsg.innerHTML = `<span class="sender">📻 SIGNAL:</span><div class="text">*transmitting to ${selectedGnome.toUpperCase()}... acquiring satellite link... bzzt*</div>`;
+            screen.appendChild(loaderMsg);
+            screen.scrollTop = screen.scrollHeight;
+
+            // Form prompt
+            let query = "";
+            if (promptType === 'strategy') {
+                query = "Draft a satirical, gangster-themed invasion strategy against the HOA 'Perfect Patch' overlords based on our current yard chaos and dollars.";
+            } else if (promptType === 'banter') {
+                query = "Give me a quick street-level update/banter about our current yard turf situation and accumulated Vandal Dollars.";
+            } else {
+                query = customText;
+            }
+
+            const modelUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+            const sysInstruction = getSystemInstruction(selectedGnome, gnomesActive, yardChaos, dollars);
+
+            const payload = {
+                contents: [{ parts: [{ text: query }] }],
+                systemInstruction: { parts: [{ text: sysInstruction }] }
+            };
+
+            // Disable UI during transfer
+            toggleControlButtons(true);
+
+            try {
+                const responseData = await fetchWithRetry(modelUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                // Remove loader
+                const loader = document.getElementById('radio-loader');
+                if (loader) loader.remove();
+
+                const responseText = responseData.candidates?.[0]?.content?.parts?.[0]?.text || "*static crackle* Signal drop on the channel... repeat? *over*";
+
+                // Log response
+                const aiMsg = document.createElement('div');
+                aiMsg.className = 'radio-msg ai';
+                aiMsg.innerHTML = `<span class="sender">📻 ${selectedGnome.toUpperCase()}:</span><div class="text">${responseText}</div>`;
+                screen.appendChild(aiMsg);
+                screen.scrollTop = screen.scrollHeight;
+
+            } catch (error) {
+                const loader = document.getElementById('radio-loader');
+                if (loader) loader.remove();
+
+                const errorMsg = document.createElement('div');
+                errorMsg.className = 'radio-msg ai';
+                errorMsg.innerHTML = `<span class="sender">⚠️ COMMS ERROR:</span><div class="text">${error.message}</div>`;
+                screen.appendChild(errorMsg);
+                screen.scrollTop = screen.scrollHeight;
+            } finally {
+                toggleControlButtons(false);
+                inputField.value = "";
+            }
+        }
+
+        function toggleControlButtons(disabled) {
+            document.getElementById('btn-ai-strategy').disabled = disabled;
+            document.getElementById('btn-ai-banter').disabled = disabled;
+            document.getElementById('btn-radio-send').disabled = disabled;
+            document.getElementById('radio-input').disabled = disabled;
+        }
+
+        // Action Bindings
+        document.getElementById('btn-ai-strategy').addEventListener('click', () => communicateWithSquad('strategy'));
+        document.getElementById('btn-ai-banter').addEventListener('click', () => communicateWithSquad('banter'));
+        document.getElementById('btn-radio-send').addEventListener('click', () => {
+            const val = document.getElementById('radio-input').value.trim();
+            if (val) communicateWithSquad('custom', val);
+        });
+        document.getElementById('radio-input').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                const val = document.getElementById('radio-input').value.trim();
+                if (val) communicateWithSquad('custom', val);
+            }
+        });
+    </script>
+</body>
+</html>```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Hyper-Marble: FX Nexus Edition</title>
+    <style>
+        /* Mathematically Advanced CSS Micro-Engineering */
+        :root {
+            --ui-bg: rgba(5, 5, 10, 0.65);
+            --ui-color: #00ffcc;
+            --ui-alt: #ff0055;
+            --font-micro: 8px;
+            --marquee-speed: 20s;
+        }
+
+        body, html {
+            margin: 0; padding: 0; width: 100vw; height: 100vh;
+            overflow: hidden; background-color: #000;
+            touch-action: none; user-select: none;
+            font-family: 'Courier New', Courier, monospace;
+        }
+
+        #canvas-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
+
+        /* Top Left / Top Right Micro-Marquee UI Panels */
+        .nexus-ui-panel {
+            position: absolute; top: 5px; height: 14px; width: 160px;
+            background: var(--ui-bg); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+            border: 0.5px solid rgba(0, 255, 204, 0.3); color: var(--ui-color);
+            font-size: var(--font-micro); line-height: 14px; overflow: hidden;
+            z-index: 100; display: flex; align-items: center; border-radius: 2px;
+            pointer-events: auto;
+        }
+        .nexus-ui-panel.tl { left: 5px; }
+        .nexus-ui-panel.tr { right: 5px; border-color: rgba(255, 0, 85, 0.3); color: var(--ui-alt); }
+
+        .icon-trigger {
+            padding: 0 5px; cursor: pointer; height: 100%; display: flex;
+            align-items: center; justify-content: center; user-select: none; z-index: 101;
+            background: rgba(255,255,255,0.05); transition: background 0.2s;
+        }
+        .icon-trigger:active { background: rgba(255,255,255,0.2); }
+        .tl .icon-trigger { border-right: 0.5px solid rgba(0,255,204,0.3); }
+        .tr .icon-trigger { border-left: 0.5px solid rgba(255,0,85,0.3); order: 2; }
+
+        .marquee-container { flex: 1; overflow: hidden; position: relative; white-space: nowrap; }
+        .marquee-content { display: inline-block; padding-left: 100%; animation: marquee var(--marquee-speed) linear infinite; }
+        .tr .marquee-content { animation: marquee-reverse var(--marquee-speed) linear infinite; }
+
+        @keyframes marquee { 0% { transform: translate(0, 0); } 100% { transform: translate(-100%, 0); } }
+        @keyframes marquee-reverse { 0% { transform: translate(-100%, 0); } 100% { transform: translate(0, 0); } }
+
+        /* Drag-Select Autohide Menu */
+        .drag-menu {
+            position: absolute; background: rgba(0, 5, 10, 0.9);
+            border: 0.5px solid var(--ui-color); color: var(--ui-color);
+            font-size: var(--font-micro); padding: 2px; display: none;
+            flex-direction: column; gap: 2px; z-index: 150;
+            backdrop-filter: blur(8px); border-radius: 2px;
+            transform-origin: top; opacity: 0; transition: opacity 0.2s ease;
+        }
+        .tr-menu { border-color: var(--ui-alt); color: var(--ui-alt); }
+
+        .drag-menu-item {
+            padding: 6px 12px; cursor: pointer; text-transform: uppercase;
+            letter-spacing: 1px; border: 0.5px solid transparent; transition: all 0.1s;
+        }
+        .drag-menu-item.active { background: rgba(0, 255, 204, 0.2); border-color: var(--ui-color); }
+        .tr-menu .drag-menu-item.active { background: rgba(255, 0, 85, 0.2); border-color: var(--ui-alt); }
+
+        /* PIP Frames */
+        .pip-container {
+            position: absolute; bottom: 15px; width: 140px; height: 105px;
+            z-index: 90; cursor: pointer; border: 1px solid rgba(255,255,255,0.2);
+            background: rgba(0,0,0,0.8); overflow: hidden;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5); backdrop-filter: blur(2px);
+        }
+        #pip-left-box { left: 15px; border-left: 2px solid var(--ui-color); }
+        #pip-right-box { right: 15px; border-right: 2px solid var(--ui-alt); }
+
+        .pip-label {
+            position: absolute; top: 0; left: 0; background: rgba(0,0,0,0.8);
+            color: #fff; font-size: var(--font-micro); padding: 2px 4px;
+            text-transform: uppercase; letter-spacing: 1px; z-index: 95;
+        }
+        
+        #boot-screen {
+            position: absolute; inset: 0; background: #000; z-index: 500;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            color: var(--ui-color); font-size: 10px; letter-spacing: 2px;
+        }
+        #boot-screen button {
+            background: transparent; border: 1px solid var(--ui-color); color: var(--ui-color);
+            padding: 10px 20px; font-family: inherit; font-size: 12px; cursor: pointer;
+            margin-top: 20px; text-transform: uppercase; transition: all 0.2s;
+        }
+        #boot-screen button:hover { background: var(--ui-color); color: #000; }
+    </style>
+
+    <!-- Import Map for Generative Procedural Modules -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.module.js",
+                "cannon-es": "https://unpkg.com/cannon-es@0.20.0/dist/cannon-es.js"
+            }
+        }
+    </script>
+</head>
+<body>
+
+    <div id="boot-screen">
+        <div style="margin-bottom: 10px;">NEXUS META-PRODUCTIVE ENGINE v4.2</div>
+        <div style="font-size: 8px; color: #888;">100 FX NODES // PROCEDURAL GENERATION // CANNON.JS RIG</div>
+        <button id="boot-btn">Initialize Physics Engine</button>
+    </div>
+
+    <!-- Micro-Marquee UI (Top Left & Right) -->
+    <div class="nexus-ui-panel tl" id="panel-tl">
+        <div class="icon-trigger" id="icon-tl" title="Hold & Swipe">⎈</div>
+        <div class="marquee-container">
+            <div class="marquee-content" id="telemetry-mq">SYS_OPT // VEL: 0 // POS_Z: 0 // NODE_SYNC: 100%</div>
+        </div>
+    </div>
+
+    <div class="nexus-ui-panel tr" id="panel-tr">
+        <div class="marquee-container">
+            <div class="marquee-content" id="log-mq">AWAITING_INPUT // SPATIAL_DYNAMICS: ACTIVE // GRAVITY: STANDARD</div>
+        </div>
+        <div class="icon-trigger" id="icon-tr" title="Hold & Swipe">⏣</div>
+    </div>
+
+    <!-- Drag-Select Autohide Menus -->
+    <div class="drag-menu" id="menu-tl">
+        <div class="drag-menu-item" data-action="regen_topology">Regen Topology</div>
+        <div class="drag-menu-item" data-action="mutate_fx">Mutate FX Nodes</div>
+    </div>
+
+    <div class="drag-menu tr-menu" id="menu-tr">
+        <div class="drag-menu-item" data-action="invert_gravity">Invert Gravity</div>
+        <div class="drag-menu-item" data-action="hyper_speed">Hyper Speed</div>
+    </div>
+
+    <!-- PIP Viewports -->
+    <div id="pip-left-box" class="pip-container">
+        <div class="pip-label" id="pip-left-label">ETHER_REALM</div>
+    </div>
+    <div id="pip-right-box" class="pip-container">
+        <div class="pip-label" id="pip-right-label">RETRO_VOID</div>
+    </div>
+
+    <div id="canvas-container"></div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import * as CANNON from 'cannon-es';
+
+        // --- 192 IQ GLOBAL CONFIG ---
+        const CONFIG = {
+            segmentLength: 50,
+            viewDist: 350,
+            baseGravity: -40,
+            timeScale: 1.0
+        };
+
+        const GlobalUniforms = {
+            uTime: { value: 0 },
+            uGlobalMutation: { value: 1.0 }
+        };
+
+        let renderer;
+        let mainIdx = 0; // 0=Spectral, 1=Ether, 2=Retro
+        let universes = [];
+        
+        const Input = { 
+            active: false, 
+            startX: 0, 
+            currentX: 0, 
+            isUIInteraction: false 
+        };
+
+        // --- 100 SPECIAL FX NEXUS ARCHITECTURE ---
+        // Dynamically injects mathematically advanced shaders into standard Three.js materials
+        const FXNexus = {
+            registry: [],
+            
+            attachNode(mesh, type, customParams = {}) {
+                if(!mesh.material) return;
+                
+                // Clone material to avoid overriding shared references
+                mesh.material = mesh.material.clone();
+                mesh.userData.fxType = type;
+                
+                const fxUniforms = {
+                    time: GlobalUniforms.uTime,
+                    mutation: GlobalUniforms.uGlobalMutation,
+                    intensity: { value: customParams.intensity || 1.0 },
+                    colorShift: { value: new THREE.Color(customParams.color || 0xffffff) }
+                };
+
+                mesh.material.onBeforeCompile = (shader) => {
+                    shader.uniforms.time = fxUniforms.time;
+                    shader.uniforms.mutation = fxUniforms.mutation;
+                    shader.uniforms.intensity = fxUniforms.intensity;
+                    shader.uniforms.colorShift = fxUniforms.colorShift;
+
+                    if (type === 'quantum_wave') {
+                        shader.vertexShader = `
+                            uniform float time;
+                            uniform float mutation;
+                            uniform float intensity;
+                            ${shader.vertexShader}
+                        `.replace(
+                            `#include <begin_vertex>`,
+                            `
+                            #include <begin_vertex>
+                            float wave = sin(position.x * 0.2 + time * 2.0) * cos(position.z * 0.2 + time) * 2.0 * intensity * mutation;
+                            transformed.y += wave;
+                            `
+                        );
+                    } 
+                    else if (type === 'ether_pulse') {
+                        shader.fragmentShader = `
+                            uniform float time;
+                            uniform float mutation;
+                            ${shader.fragmentShader}
+                        `.replace(
+                            `#include <dithering_fragment>`,
+                            `
+                            #include <dithering_fragment>
+                            float pulse = abs(sin(vUv.y * 10.0 - time * 5.0)) * mutation;
+                            gl_FragColor.rgb += vec3(0.0, 0.5, 0.5) * pulse * 0.5;
+                            `
+                        );
+                    }
+                    else if (type === 'retro_halftone') {
+                        shader.fragmentShader = `
+                            uniform float time;
+                            ${shader.fragmentShader}
+                        `.replace(
+                            `#include <dithering_fragment>`,
+                            `
+                            #include <dithering_fragment>
+                            vec2 grid = fract(gl_FragCoord.xy / 8.0);
+                            float dist = length(grid - 0.5);
+                            float luma = dot(gl_FragColor.rgb, vec3(0.299, 0.587, 0.114));
+                            if(dist > luma * 0.8) gl_FragColor.rgb *= 0.2;
+                            `
+                        );
+                    }
+                };
+
+                this.registry.push(mesh);
+            },
+            
+            mutateAll() {
+                GlobalUniforms.uGlobalMutation.value = 3.0; // Spike
+                setTimeout(() => GlobalUniforms.uGlobalMutation.value = 1.0, 800); // Decay
+            }
+        };
+
+        // --- PROCEDURAL SPATIAL ENVIRONMENT GENERATOR ---
+        class Universe {
+            constructor(type, name) {
+                this.type = type; 
+                this.name = name;
+                this.scene = new THREE.Scene();
+                this.world = new CANNON.World();
+                this.world.gravity.set(0, CONFIG.baseGravity, 0);
+                this.world.broadphase = new CANNON.SAPBroadphase(this.world);
+                
+                const m1 = new CANNON.Material();
+                const m2 = new CANNON.Material();
+                this.world.addContactMaterial(new CANNON.ContactMaterial(m1, m2, { friction: 0.05, restitution: 0.6 }));
+                this.matGround = m1; this.matPlayer = m2;
+
+                this.camera = new THREE.PerspectiveCamera(70, window.innerWidth/window.innerHeight, 0.1, 1000);
+                
+                this.segments = [];
+                this.obstacles = [];
+                this.lastZ = 0;
+
+                this.buildEnvironment();
+                this.spawnPlayer();
+                
+                for(let i=0; i<8; i++) this.generateTopology(i * CONFIG.segmentLength);
+            }
+
+            buildEnvironment() {
+                if(this.type === 'Spectral') {
+                    this.scene.fog = new THREE.FogExp2(0x050510, 0.008);
+                    this.scene.background = new THREE.Color(0x050510);
+                    const l = new THREE.DirectionalLight(0x00ffcc, 1); l.position.set(10,50,20); this.scene.add(l);
+                    
+                    // FX Node Background Matrix
+                    const bgGeo = new THREE.IcosahedronGeometry(200, 1);
+                    const bgMat = new THREE.MeshBasicMaterial({color: 0x004433, wireframe: true});
+                    this.bgMesh = new THREE.Mesh(bgGeo, bgMat);
+                    this.scene.add(this.bgMesh);
+                    FXNexus.attachNode(this.bgMesh, 'quantum_wave', {intensity: 0.1});
+                } 
+                else if (this.type === 'Ether') {
+                    this.scene.fog = new THREE.FogExp2(0xeeffff, 0.004);
+                    this.scene.background = new THREE.Color(0xaaccff);
+                    const hemi = new THREE.HemisphereLight(0xffffff, 0xffeedd, 0.8); this.scene.add(hemi);
+                    
+                    const bgGeo = new THREE.SphereGeometry(200, 32, 32);
+                    const bgMat = new THREE.MeshBasicMaterial({color: 0xffffff, transparent: true, opacity: 0.1});
+                    this.bgMesh = new THREE.Mesh(bgGeo, bgMat);
+                    this.scene.add(this.bgMesh);
+                    FXNexus.attachNode(this.bgMesh, 'ether_pulse');
+                } 
+                else {
+                    this.scene.fog = new THREE.FogExp2(0x110022, 0.015);
+                    this.scene.background = new THREE.Color(0x110022);
+                    const l = new THREE.DirectionalLight(0xff0055, 1); l.position.set(-10,50,20); this.scene.add(l);
+                    
+                    const bgGeo = new THREE.PlaneGeometry(500, 500);
+                    const bgMat = new THREE.MeshBasicMaterial({color: 0xff0055});
+                    this.bgMesh = new THREE.Mesh(bgGeo, bgMat);
+                    this.bgMesh.position.y = -50;
+                    this.bgMesh.rotation.x = -Math.PI/2;
+                    this.scene.add(this.bgMesh);
+                    FXNexus.attachNode(this.bgMesh, 'retro_halftone');
+                }
+            }
+
+            spawnPlayer() {
+                const r = 1.5;
+                let mat;
+                if(this.type==='Spectral') mat = new THREE.MeshStandardMaterial({color:0x00ffcc, wireframe: true});
+                else if(this.type==='Ether') mat = new THREE.MeshPhysicalMaterial({color: 0x00f3ff, transmission: 0.9, thickness: 1.5});
+                else mat = new THREE.MeshBasicMaterial({color:0xff0055});
+
+                this.marble = new THREE.Mesh(new THREE.SphereGeometry(r, 16, 16), mat);
+                this.scene.add(this.marble);
+                FXNexus.attachNode(this.marble, this.type==='Retro' ? 'retro_halftone' : 'ether_pulse');
+
+                this.body = new CANNON.Body({ mass: 15, material: this.matPlayer, position: new CANNON.Vec3(0, 5, 0) });
+                this.body.addShape(new CANNON.Sphere(r));
+                this.body.linearDamping = 0.05;
+                this.world.addBody(this.body);
+                this.body.velocity.set(0,0,50);
+            }
+
+            generateTopology(z) {
+                const group = new THREE.Group();
+                const bodies = [];
+                const len = CONFIG.segmentLength;
+
+                if (this.type === 'Spectral') {
+                    // Procedural mathematical wave terrain
+                    const w = 30;
+                    const geo = new THREE.PlaneGeometry(w, len, 10, 10);
+                    geo.rotateX(-Math.PI/2);
+                    const mat = new THREE.MeshStandardMaterial({color:0x002222, wireframe: true});
+                    const mesh = new THREE.Mesh(geo,mat);
+                    mesh.position.set(0, 0, z+len/2);
+                    
+                    FXNexus.attachNode(mesh, 'quantum_wave', {intensity: 1.5}); // FX Node assigned
+                    group.add(mesh);
+                    
+                    // Physics representation (simplified plane for performance)
+                    const body = new CANNON.Body({mass:0, material:this.matGround});
+                    body.addShape(new CANNON.Box(new CANNON.Vec3(w/2, 0.5, len/2)));
+                    body.position.copy(mesh.position);
+                    this.world.addBody(body);
+                    bodies.push(body);
+                } 
+                else if (this.type === 'Ether') {
+                    // Crystalline fragmented path
+                    const w = 15;
+                    for(let k=0; k<3; k++) {
+                        const geo = new THREE.IcosahedronGeometry(Math.random()*2+2, 0);
+                        const mat = new THREE.MeshPhysicalMaterial({ color: 0xffffff, transmission: 0.8, thickness: 1.0 });
+                        const mesh = new THREE.Mesh(geo, mat);
+                        mesh.position.set((Math.random()-0.5)*w, -2 + Math.random()*2, z + (len/3)*k);
+                        mesh.scale.set(1, 0.2, 3);
+                        FXNexus.attachNode(mesh, 'ether_pulse');
+                        group.add(mesh);
+
+                        const body = new CANNON.Body({mass:0, material:this.matGround});
+                        body.addShape(new CANNON.Box(new CANNON.Vec3(2, 0.5, 6)));
+                        body.position.copy(mesh.position);
+                        this.world.addBody(body);
+                        bodies.push(body);
+                    }
+                } else {
+                    // Retro Halftone block path
+                    const geo = new THREE.BoxGeometry(20, 2, len*0.9);
+                    const mat = new THREE.MeshBasicMaterial({color:0x00aaff});
+                    const mesh = new THREE.Mesh(geo, mat);
+                    mesh.position.set(0, -2, z+len/2);
+                    FXNexus.attachNode(mesh, 'retro_halftone');
+                    group.add(mesh);
+                    
+                    const body = new CANNON.Body({mass:0, material:this.matGround});
+                    body.addShape(new CANNON.Box(new CANNON.Vec3(10, 1, len*0.45)));
+                    body.position.copy(mesh.position);
+                    this.world.addBody(body);
+                    bodies.push(body);
+                }
+
+                // Generative Obstacles
+                if(Math.random() > 0.4 && z > 50) {
+                    const geo = new THREE.OctahedronGeometry(3, 0);
+                    const mat = new THREE.MeshStandardMaterial({color:0xff0055});
+                    const mesh = new THREE.Mesh(geo, mat);
+                    mesh.position.set((Math.random()-0.5)*15, 3, z + len/2);
+                    FXNexus.attachNode(mesh, this.type==='Spectral'?'quantum_wave':'ether_pulse', {intensity: 0.5});
+                    group.add(mesh);
+                    
+                    const body = new CANNON.Body({mass:0, type:CANNON.Body.KINEMATIC});
+                    body.addShape(new CANNON.Box(new CANNON.Vec3(2,2,2)));
+                    body.position.copy(mesh.position);
+                    this.world.addBody(body);
+                    bodies.push(body);
+                    this.obstacles.push({mesh, body, phase: Math.random()*Math.PI*2});
+                }
+
+                this.scene.add(group);
+                this.segments.push({mesh:group, bodies:bodies, z:z});
+                this.lastZ = z + len;
+            }
+
+            update(dt, steer) {
+                this.world.step(dt);
+
+                // Math-driven velocity control
+                this.body.velocity.x += steer * 1.5;
+                if(this.body.velocity.z < 80 * CONFIG.timeScale) this.body.velocity.z += 0.5;
+
+                this.marble.position.copy(this.body.position);
+                this.marble.quaternion.copy(this.body.quaternion);
+
+                const t = GlobalUniforms.uTime.value;
+                
+                // Animate background FX
+                if(this.bgMesh) {
+                    this.bgMesh.rotation.y = t * 0.05;
+                    if(this.type === 'Spectral') this.bgMesh.rotation.z = t * 0.02;
+                }
+
+                // Animate procedural obstacles
+                this.obstacles.forEach(o => {
+                    o.body.position.x += Math.sin(t*2 + o.phase) * 0.1;
+                    o.body.quaternion.setFromEuler(t, t*0.5, 0);
+                    o.mesh.position.copy(o.body.position);
+                    o.mesh.quaternion.copy(o.body.quaternion);
+                });
+
+                // Smooth camera follow
+                this.camera.position.z += ((this.marble.position.z - 30) - this.camera.position.z) * 0.1;
+                this.camera.position.y += ((this.marble.position.y + 12) - this.camera.position.y) * 0.1;
+                this.camera.position.x += (this.marble.position.x * 0.3 - this.camera.position.x) * 0.1;
+                this.camera.lookAt(this.marble.position);
+
+                // Procedural endless generation
+                if(this.marble.position.z > this.lastZ - CONFIG.viewDist) this.generateTopology(this.lastZ);
+                if(this.segments.length > 0 && this.segments[0].z < this.marble.position.z - 150) {
+                    const s = this.segments.shift();
+                    this.scene.remove(s.mesh);
+                    s.bodies.forEach(b => this.world.removeBody(b));
+                }
+                
+                // Void recovery
+                if(this.marble.position.y < -40) {
+                    this.body.position.set(0, 10, this.marble.position.z + 50);
+                    this.body.velocity.set(0,0,40 * CONFIG.timeScale);
+                }
+            }
+        }
+
+        // --- MICRO-UI DRAG-SELECT ARCHITECTURE ---
+        const UIManager = {
+            holdTimer: null,
+            activeMenu: null,
+            isDragging: false,
+
+            init() {
+                this.setupHoldArea('icon-tl', 'menu-tl');
+                this.setupHoldArea('icon-tr', 'menu-tr');
+                
+                document.addEventListener('pointermove', (e) => this.onMove(e), {passive: false});
+                document.addEventListener('pointerup', (e) => this.onRelease(e));
+            },
+
+            setupHoldArea(iconId, menuId) {
+                const icon = document.getElementById(iconId);
+                icon.addEventListener('pointerdown', (e) => {
+                    e.preventDefault();
+                    Input.isUIInteraction = true;
+                    this.holdTimer = setTimeout(() => this.showMenu(menuId, iconId), 300); // 300ms hold logic
+                });
+                icon.addEventListener('pointerleave', () => clearTimeout(this.holdTimer));
+            },
+
+            showMenu(menuId, iconId) {
+                const menu = document.getElementById(menuId);
+                const rect = document.getElementById(iconId).getBoundingClientRect();
+                
+                if (iconId === 'icon-tl') {
+                    menu.style.left = '5px'; menu.style.top = '22px';
+                } else {
+                    menu.style.right = '5px'; menu.style.left = 'auto'; menu.style.top = '22px';
+                }
+
+                menu.style.display = 'flex';
+                void menu.offsetWidth; // force reflow
+                menu.style.opacity = '1';
+                this.activeMenu = menu;
+                this.isDragging = true;
+            },
+
+            onMove(e) {
+                if (!this.isDragging || !this.activeMenu) return;
+                e.preventDefault();
+                const el = document.elementFromPoint(e.clientX, e.clientY);
+                this.activeMenu.querySelectorAll('.drag-menu-item').forEach(i => i.classList.remove('active'));
+                if (el && el.classList.contains('drag-menu-item')) el.classList.add('active');
+            },
+
+            onRelease(e) {
+                clearTimeout(this.holdTimer);
+                if (!this.isDragging || !this.activeMenu) {
+                    Input.isUIInteraction = false;
+                    return;
+                }
+                const el = document.elementFromPoint(e.clientX, e.clientY);
+                if (el && el.classList.contains('drag-menu-item')) this.executeCommand(el.dataset.action);
+                
+                this.activeMenu.style.opacity = '0';
+                setTimeout(() => {
+                    if (this.activeMenu) this.activeMenu.style.display = 'none';
+                    this.activeMenu = null;
+                    this.isDragging = false;
+                    Input.isUIInteraction = false;
+                }, 200);
+            },
+
+            executeCommand(action) {
+                const logMq = document.getElementById('log-mq');
+                logMq.innerText = `[SYS_EXEC: ${action.toUpperCase()}]`;
+                
+                switch(action) {
+                    case 'regen_topology':
+                        universes[mainIdx].segments.forEach(s => {
+                            universes[mainIdx].scene.remove(s.mesh);
+                            s.bodies.forEach(b => universes[mainIdx].world.removeBody(b));
+                        });
+                        universes[mainIdx].segments = [];
+                        universes[mainIdx].lastZ = universes[mainIdx].marble.position.z + 20;
+                        for(let i=0; i<5; i++) universes[mainIdx].generateTopology(universes[mainIdx].lastZ + i*CONFIG.segmentLength);
+                        break;
+                    case 'mutate_fx':
+                        FXNexus.mutateAll();
+                        break;
+                    case 'invert_gravity':
+                        CONFIG.baseGravity = CONFIG.baseGravity === -40 ? 10 : -40;
+                        universes.forEach(u => u.world.gravity.set(0, CONFIG.baseGravity, 0));
+                        break;
+                    case 'hyper_speed':
+                        CONFIG.timeScale = CONFIG.timeScale === 1.0 ? 2.5 : 1.0;
+                        break;
+                }
+            }
+        };
+
+        // --- CORE INITIALIZATION ---
+        document.getElementById('boot-btn').addEventListener('click', () => {
+            document.getElementById('boot-screen').style.display = 'none';
+            
+            renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.setScissorTest(true);
+            document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+            universes.push(new Universe('Spectral', 'SPECTRAL'));
+            universes.push(new Universe('Ether', 'ETHER'));
+            universes.push(new Universe('Retro', 'RETRO'));
+
+            UIManager.init();
+            setupSteering();
+            updatePIPLabels();
+            animate();
+        });
+
+        function setupSteering() {
+            const c = document.getElementById('canvas-container');
+            const start = x => { if(!Input.isUIInteraction){ Input.active=true; Input.startX=Input.currentX=x; }};
+            const move = x => { if(Input.active) Input.currentX=x; };
+            const end = () => Input.active=false;
+
+            c.addEventListener('touchstart', e => start(e.touches[0].clientX), {passive:true});
+            c.addEventListener('touchmove', e => move(e.touches[0].clientX), {passive:true});
+            c.addEventListener('touchend', end);
+            c.addEventListener('mousedown', e => start(e.clientX));
+            window.addEventListener('mousemove', e => move(e.clientX));
+            window.addEventListener('mouseup', end);
+
+            // PIP Hit Detection
+            const checkPipClick = (x, y) => {
+                if(Input.isUIInteraction) return;
+                const w = window.innerWidth;
+                const h = window.innerHeight;
+                if(y > h - 120 && y < h - 15) {
+                    if(x > 15 && x < 155) swapWorlds(1); // Left PIP
+                    else if(x > w - 155 && x < w - 15) swapWorlds(2); // Right PIP
+                }
+            };
+            c.addEventListener('mousedown', e => checkPipClick(e.clientX, e.clientY));
+            c.addEventListener('touchstart', e => checkPipClick(e.changedTouches[0].clientX, e.changedTouches[0].clientY));
+        }
+
+        function swapWorlds(pipPos) { 
+            const others = [0, 1, 2].filter(i => i !== mainIdx);
+            mainIdx = (pipPos === 1) ? others[0] : others[1];
+            updatePIPLabels();
+            FXNexus.mutateAll(); // Trigger FX burst on swap
+            document.getElementById('log-mq').innerText = `[REALITY_SHIFT: ${universes[mainIdx].name} ENGAGED]`;
+        }
+
+        function updatePIPLabels() {
+            const others = [0, 1, 2].filter(i => i !== mainIdx);
+            document.getElementById('pip-left-label').innerText = universes[others[0]].name;
+            document.getElementById('pip-right-label').innerText = universes[others[1]].name;
+        }
+
+        const clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const dt = clock.getDelta();
+            GlobalUniforms.uTime.value += dt * CONFIG.timeScale;
+
+            // Mathematical steering calculation
+            let steer = 0;
+            if(Input.active) steer = (Input.currentX - Input.startX) * 0.05;
+
+            universes.forEach(u => u.update(dt * CONFIG.timeScale, steer));
+
+            // Update Telemetry Marquee
+            const u = universes[mainIdx];
+            const speed = Math.floor(u.body.velocity.length() * 3.6);
+            document.getElementById('telemetry-mq').innerText = `REALITY: [${u.name}] // VEL: ${speed} KM/H // DIST: ${Math.floor(u.marble.position.z)} M // GRAVITY: ${CONFIG.baseGravity} // `;
+
+            // Render Pipeline (Scissor Test for PIP)
+            const w = window.innerWidth;
+            const h = window.innerHeight;
+            const others = [0, 1, 2].filter(i => i !== mainIdx);
+
+            // 1. Render Main
+            renderer.setScissor(0, 0, w, h);
+            renderer.setViewport(0, 0, w, h);
+            renderer.clearColor();
+            renderer.render(universes[mainIdx].scene, universes[mainIdx].camera);
+
+            // PIP Parallax calc
+            const pX = steer * 15;
+
+            // 2. Render Left PIP
+            renderer.setScissor(15 + pX, 15, 140, 105); 
+            renderer.setViewport(15 + pX, 15, 140, 105);
+            renderer.clearDepth(); 
+            renderer.render(universes[others[0]].scene, universes[others[0]].camera);
+            document.getElementById('pip-left-box').style.transform = `translateX(${pX}px)`;
+
+            // 3. Render Right PIP
+            renderer.setScissor(w - 155 + pX, 15, 140, 105); 
+            renderer.setViewport(w - 155 + pX, 15, 140, 105);
+            renderer.clearDepth();
+            renderer.render(universes[others[1]].scene, universes[others[1]].camera);
+            document.getElementById('pip-right-box').style.transform = `translateX(${pX}px)`;
+        }
+    </script>
+</body>
+</html>
+
+```
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Aether-Forge NLI Engine</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+        
+        :root {
+            --neon-blue: #00f3ff;
+            --neon-amber: #ffb000;
+            --glass-bg: rgba(10, 15, 20, 0.75);
+            --glass-border: rgba(0, 243, 255, 0.3);
+        }
+
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #050505;
+            font-family: 'Share Tech Mono', monospace;
+            color: #e0e0e0;
+            user-select: none;
+            touch-action: none;
+        }
+
+        /* UI Base */
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid var(--glass-border);
+            box-shadow: 0 0 20px rgba(0, 243, 255, 0.1);
+            transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        /* Typography - Smallest Font */
+        .text-micro { font-size: 10px; line-height: 1.2; }
+        .text-nano { font-size: 8px; line-height: 1.1; }
+
+        /* Scrollbars */
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--neon-blue); border-radius: 2px; }
+
+        /* Radial HUD */
+        #radial-hud {
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 200px;
+            height: 100px;
+            pointer-events: none;
+            z-index: 100;
+        }
+
+        .hud-center {
+            position: absolute;
+            top: -20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 60px;
+            height: 60px;
+            background: radial-gradient(circle, var(--glass-bg), #000);
+            border: 1px solid var(--neon-blue);
+            border-radius: 50%;
+            pointer-events: auto;
+            cursor: pointer;
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            padding-bottom: 5px;
+            font-size: 16px;
+            box-shadow: 0 0 15px var(--neon-blue);
+            transition: all 0.3s ease;
+        }
+
+        .hud-center:hover { box-shadow: 0 0 25px var(--neon-amber); border-color: var(--neon-amber); }
+
+        .hud-node {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            color: var(--neon-blue);
+            pointer-events: auto;
+            cursor: pointer;
+            opacity: 0;
+            transform: scale(0);
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            font-family: "Wingdings", "Webdings", sans-serif; /* fallback to unicode wings */
+        }
+        
+        .hud-node:hover { background: var(--neon-blue); color: #000; box-shadow: 0 0 10px var(--neon-blue); }
+
+        #radial-hud.active .hud-node { opacity: 1; transform: scale(1); }
+        
+        /* Node Positioning (Half Circle) */
+        #radial-hud.active .node-1 { top: 20px; left: 15px; }
+        #radial-hud.active .node-2 { top: 50px; left: 45px; }
+        #radial-hud.active .node-3 { top: 60px; left: 85px; }
+        #radial-hud.active .node-4 { top: 50px; left: 125px; }
+        #radial-hud.active .node-5 { top: 20px; left: 155px; }
+
+        /* Slide Windows */
+        .window {
+            position: absolute;
+            z-index: 50;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Left: NLI Terminal */
+        #window-left { top: 10%; left: 0; bottom: 10%; width: 300px; transform: translateX(0); border-right: 1px solid var(--neon-blue); border-top-right-radius: 10px; border-bottom-right-radius: 10px;}
+        #window-left.hidden-l { transform: translateX(-100%); }
+        .handle-l { position: absolute; right: -20px; top: 50%; width: 20px; height: 50px; transform: translateY(-50%); background: var(--glass-bg); border: 1px solid var(--neon-blue); border-left: none; cursor: pointer; display: flex; align-items: center; justify-content: center; border-top-right-radius: 5px; border-bottom-right-radius: 5px;}
+
+        /* Right: Builder/Preview */
+        #window-right { top: 10%; right: 0; bottom: 10%; width: 45%; transform: translateX(0); border-left: 1px solid var(--neon-amber); border-top-left-radius: 10px; border-bottom-left-radius: 10px;}
+        #window-right.hidden-r { transform: translateX(100%); }
+        .handle-r { position: absolute; left: -20px; top: 50%; width: 20px; height: 50px; transform: translateY(-50%); background: var(--glass-bg); border: 1px solid var(--neon-amber); border-right: none; cursor: pointer; display: flex; align-items: center; justify-content: center; border-top-left-radius: 5px; border-bottom-left-radius: 5px;}
+
+        /* Bottom: Evolution Control */
+        #window-bottom { bottom: 0; left: 20%; right: 20%; height: 150px; transform: translateY(0); border-top: 1px solid var(--neon-blue); border-top-left-radius: 10px; border-top-right-radius: 10px;}
+        #window-bottom.hidden-b { transform: translateY(100%); }
+        .handle-b { position: absolute; top: -20px; left: 50%; width: 60px; height: 20px; transform: translateX(-50%); background: var(--glass-bg); border: 1px solid var(--neon-blue); border-bottom: none; cursor: pointer; display: flex; align-items: center; justify-content: center; border-top-left-radius: 10px; border-top-right-radius: 10px;}
+
+        /* Loader */
+        .spinner { border: 2px solid rgba(0, 243, 255, 0.1); border-left-color: var(--neon-blue); border-radius: 50%; width: 14px; height: 14px; animation: spin 1s linear infinite; display: inline-block; vertical-align: middle;}
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* API Key Overlay */
+        #api-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 1000; display: flex; align-items: center; justify-content: center; }
+        
+        .agent-alpha { color: var(--neon-blue); }
+        .agent-beta { color: var(--neon-amber); }
+        .sys-msg { color: #a0a0a0; }
+    </style>
+</head>
+<body>
+
+    <!-- API Key Entry -->
+    <div id="api-overlay" class="glass-panel text-micro">
+        <div class="p-6 text-center max-w-sm">
+            <h2 class="text-lg mb-2 text-[var(--neon-blue)]">AETHER-FORGE INITIALIZATION</h2>
+            <p class="mb-4 text-nano text-gray-400">Provide Gemini API Key for NLI synthesis & compilation.</p>
+            <input type="password" id="api-input" class="w-full bg-black/50 border border-[var(--neon-blue)] text-white p-2 mb-4 outline-none text-center" placeholder="API Key">
+            <button onclick="initEngine()" class="bg-[var(--glass-bg)] border border-[var(--neon-blue)] hover:bg-[var(--neon-blue)] hover:text-black px-6 py-2 transition-colors">IGNITE CORE</button>
+        </div>
+    </div>
+
+    <!-- 3D Background Canvas -->
+    <canvas id="bg-canvas" class="absolute inset-0 w-full h-full -z-10"></canvas>
+
+    <!-- Radial HUD -->
+    <div id="radial-hud">
+        <div class="hud-center" onclick="toggleHUD()" title="Main Menu">⎈</div>
+        <div class="hud-node node-1" onclick="toggleWindow('left')" title="Terminal (✆)">✆</div>
+        <div class="hud-node node-2" onclick="toggleWindow('bottom')" title="Evolution (⚗)">⚗</div>
+        <div class="hud-node node-3" onclick="toggleWindow('right')" title="Builder (🖧)">🖧</div>
+        <div class="hud-node node-4" onclick="cycleCamera()" id="cam-icon" title="Camera (📹)">📹</div>
+        <div class="hud-node node-5" onclick="clearSystem()" title="Reset (⟲)">⟲</div>
+    </div>
+
+    <!-- Left Window: NLI Terminal -->
+    <div id="window-left" class="window glass-panel">
+        <div class="handle-l text-nano" onclick="toggleWindow('left')">||</div>
+        <div class="p-2 border-b border-[var(--glass-border)] flex justify-between items-center bg-black/30">
+            <span class="text-micro font-bold tracking-widest text-[var(--neon-blue)]">NLI.TERMINAL</span>
+            <div class="flex gap-1">
+                <button onclick="triggerTurn()" class="px-2 py-1 border border-gray-600 hover:border-[var(--neon-blue)] text-nano">STEP</button>
+                <button onclick="toggleAuto()" id="auto-btn" class="px-2 py-1 border border-gray-600 hover:border-[var(--neon-amber)] text-nano">AUTO</button>
+            </div>
+        </div>
+        <div id="chat-log" class="flex-1 overflow-y-auto p-2 text-micro space-y-2">
+            <div class="sys-msg">>> SYSTEM: Awaiting input seed...</div>
+        </div>
+        <div class="p-2 border-t border-[var(--glass-border)] flex">
+            <input type="text" id="seed-input" class="flex-1 bg-transparent border-none outline-none text-[var(--neon-blue)] text-micro" placeholder="Inject seed logic..." onkeypress="if(event.key==='Enter') injectSeed()">
+            <button onclick="injectSeed()" class="text-[var(--neon-blue)] hover:text-white text-nano">INJECT</button>
+        </div>
+    </div>
+
+    <!-- Right Window: App Builder Preview -->
+    <div id="window-right" class="window glass-panel">
+        <div class="handle-r text-nano" onclick="toggleWindow('right')">||</div>
+        <div class="p-2 border-b border-[var(--glass-border)] flex justify-between items-center bg-black/30">
+            <span class="text-micro font-bold tracking-widest text-[var(--neon-amber)]">RENDER.MATRIX</span>
+            <span id="render-status" class="text-nano text-gray-500">IDLE</span>
+        </div>
+        <div class="flex-1 bg-black relative">
+            <iframe id="app-preview" class="w-full h-full border-none bg-white"></iframe>
+        </div>
+    </div>
+
+    <!-- Bottom Window: Evolution Control -->
+    <div id="window-bottom" class="window glass-panel">
+        <div class="handle-b text-nano" onclick="toggleWindow('bottom')">==</div>
+        <div class="flex h-full">
+            <div class="w-1/3 p-2 border-r border-[var(--glass-border)] flex flex-col">
+                <span class="text-micro font-bold text-gray-300 mb-1">EVOLUTION ENGINE</span>
+                <button onclick="evolvePrompt()" class="w-full py-1 mb-1 border border-[var(--neon-blue)] text-[var(--neon-blue)] hover:bg-[var(--neon-blue)] hover:text-black transition-colors text-nano">EXTRACT PROMPT</button>
+                <button onclick="compileProgram()" class="w-full py-1 border border-[var(--neon-amber)] text-[var(--neon-amber)] hover:bg-[var(--neon-amber)] hover:text-black transition-colors text-nano">COMPILE HTML</button>
+                <span id="evo-status" class="mt-auto text-nano text-gray-500">Standby.</span>
+            </div>
+            <div class="w-2/3 p-2">
+                <textarea id="prompt-output" class="w-full h-full bg-black/50 border border-gray-700 text-gray-300 text-micro p-2 outline-none resize-none" placeholder="Evolved prompt will synthesize here..."></textarea>
+            </div>
+        </div>
+    </div>
+
+<script>
+    // --- GLOBAL STATE ---
+    let apiKey = ""; // Set via UI overlay
+    let chatHistory = [];
+    let isAuto = false;
+    let autoInterval = null;
+    let turnState = 'alpha'; // alpha or beta
+    
+    // --- UI LOGIC ---
+    function initEngine() {
+        const key = document.getElementById('api-input').value.trim();
+        if(key) {
+            apiKey = key;
+            document.getElementById('api-overlay').style.display = 'none';
+            logSys("Core Ignited. NLI Agents Alpha & Beta online.");
+            logSys("Enter a topic seed below to begin synthesis.");
+        }
+    }
+
+    function toggleHUD() {
+        document.getElementById('radial-hud').classList.toggle('active');
+    }
+
+    function toggleWindow(win) {
+        const el = document.getElementById(`window-${win}`);
+        el.classList.toggle(`hidden-${win.charAt(0)}`);
+    }
+
+    function logSys(msg) {
+        const log = document.getElementById('chat-log');
+        log.innerHTML += `<div class="sys-msg">>> ${msg}</div>`;
+        log.scrollTop = log.scrollHeight;
+    }
+
+    function logAgent(agent, text) {
+        const log = document.getElementById('chat-log');
+        const colorClass = agent === 'Alpha' ? 'agent-alpha' : 'agent-beta';
+        log.innerHTML += `<div class="${colorClass} mb-1 border-l border-current pl-1"><span class="font-bold opacity-70">[${agent}]</span> ${text}</div>`;
+        log.scrollTop = log.scrollHeight;
+        chatHistory.push({role: "model", parts: [{text: `[${agent}]: ${text}`}]});
+    }
+
+    // --- THREE.JS BACKGROUND (Mechanical Physics Concept) ---
+    const canvas = document.getElementById('bg-canvas');
+    const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+    
+    // Abstract Mechanical Nodes
+    const group = new THREE.Group();
+    scene.add(group);
+
+    const matBlue = new THREE.MeshBasicMaterial({ color: 0x00f3ff, wireframe: true, transparent: true, opacity: 0.3 });
+    const matAmber = new THREE.MeshBasicMaterial({ color: 0xffb000, wireframe: true, transparent: true, opacity: 0.3 });
+
+    // Inner Core
+    const coreGeo = new THREE.IcosahedronGeometry(2, 1);
+    const core = new THREE.Mesh(coreGeo, matBlue);
+    group.add(core);
+
+    // Outer Rings (Gears)
+    const ring1Geo = new THREE.TorusGeometry(4, 0.2, 16, 100);
+    const ring1 = new THREE.Mesh(ring1Geo, matAmber);
+    ring1.rotation.x = Math.PI / 2;
+    group.add(ring1);
+
+    const ring2Geo = new THREE.TorusGeometry(6, 0.1, 16, 100);
+    const ring2 = new THREE.Mesh(ring2Geo, matBlue);
+    ring2.rotation.y = Math.PI / 2;
+    group.add(ring2);
+
+    // Particles
+    const partGeo = new THREE.BufferGeometry();
+    const partCount = 500;
+    const posArray = new Float32Array(partCount * 3);
+    for(let i=0; i<partCount*3; i++) { posArray[i] = (Math.random() - 0.5) * 20; }
+    partGeo.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+    const partMat = new THREE.PointsMaterial({ size: 0.05, color: 0xffffff, transparent: true, opacity: 0.5 });
+    const particles = new THREE.Points(partGeo, partMat);
+    group.add(particles);
+
+    // Camera Modes
+    const camModes = ['Orbital', 'Pan', 'Chase', '1st Person'];
+    let camModeIdx = 0;
+    
+    let isDragging = false;
+    let prevPos = { x: 0, y: 0 };
+    let camAngles = { theta: Math.PI/4, phi: Math.PI/3, radius: 15 };
+
+    function updateCamera() {
+        const mode = camModes[camModeIdx];
+        if (mode === 'Orbital' || mode === 'Chase') {
+            camera.position.x = camAngles.radius * Math.sin(camAngles.phi) * Math.cos(camAngles.theta);
+            camera.position.y = camAngles.radius * Math.cos(camAngles.phi);
+            camera.position.z = camAngles.radius * Math.sin(camAngles.phi) * Math.sin(camAngles.theta);
+            camera.lookAt(0,0,0);
+        } else if (mode === '1st Person') {
+            camera.position.set(0, 0, 0);
+            camera.lookAt(
+                Math.sin(camAngles.phi) * Math.cos(camAngles.theta),
+                Math.cos(camAngles.phi),
+                Math.sin(camAngles.phi) * Math.sin(camAngles.theta)
+            );
+        }
+    }
+    updateCamera();
+
+    function cycleCamera() {
+        camModeIdx = (camModeIdx + 1) % camModes.length;
+        logSys(`Camera Mode: ${camModes[camModeIdx]}`);
+        document.getElementById('cam-icon').style.color = camModeIdx === 3 ? 'var(--neon-amber)' : 'var(--neon-blue)';
+        
+        if(camModes[camModeIdx] === 'Pan') { camera.position.set(0,0,15); camera.lookAt(0,0,0); }
+        else { updateCamera(); }
+    }
+
+    // Touch/Swipe Controls
+    window.addEventListener('pointerdown', e => { isDragging = true; prevPos = { x: e.clientX, y: e.clientY }; });
+    window.addEventListener('pointerup', () => isDragging = false);
+    window.addEventListener('pointermove', e => {
+        if(!isDragging) return;
+        const deltaX = e.clientX - prevPos.x;
+        const deltaY = e.clientY - prevPos.y;
+        prevPos = { x: e.clientX, y: e.clientY };
+
+        const mode = camModes[camModeIdx];
+        if(mode === 'Orbital' || mode === '1st Person') {
+            camAngles.theta -= deltaX * 0.01;
+            camAngles.phi -= deltaY * 0.01;
+            camAngles.phi = Math.max(0.1, Math.min(Math.PI - 0.1, camAngles.phi));
+            updateCamera();
+        } else if (mode === 'Pan') {
+            camera.position.x -= deltaX * 0.05;
+            camera.position.y += deltaY * 0.05;
+        }
+    });
+
+    // Animation Loop
+    function animate() {
+        requestAnimationFrame(animate);
+        core.rotation.x += 0.005;
+        core.rotation.y += 0.005;
+        ring1.rotation.z -= 0.002;
+        ring2.rotation.x += 0.003;
+        
+        if(camModes[camModeIdx] === 'Chase') {
+            camAngles.theta += 0.005; // Auto rotate
+            updateCamera();
+        }
+        
+        particles.rotation.y += 0.001;
+        renderer.render(scene, camera);
+    }
+    animate();
+
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // --- GEMINI API ENGINE ---
+    const delay = ms => new Promise(res => setTimeout(res, ms));
+
+    async function fetchGemini(messages, systemInstruction) {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+        const payload = {
+            contents: messages,
+            systemInstruction: { parts: [{ text: systemInstruction }] }
+        };
+
+        for (let i = 0; i < 5; i++) {
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await response.json();
+                if (data.candidates && data.candidates[0]) {
+                    return data.candidates[0].content.parts[0].text;
+                }
+                throw new Error("No candidates returned");
+            } catch (err) {
+                if (i === 4) throw err;
+                await delay(Math.pow(2, i) * 1000); // Exponential backoff
+            }
+        }
+    }
+
+    // --- NLI AGENT LOGIC ---
+    const alphaSys = "You are NLI Agent Alpha. You analyze the user's seed and Agent Beta's responses. Your objective is to extract hardcore physics, graphic demonstration, and mechanical science principles. Respond in 2-3 dense, highly technical sentences. Never break character. Never use conversational filler.";
+    const betaSys = "You are NLI Agent Beta. You take Agent Alpha's physics/mechanical concepts and interpret them into actionable UI/UX structures, special fx, and software logic for an advanced HTML tool. Respond in 2-3 dense, structural sentences. Never break character. Never use conversational filler.";
+
+    async function injectSeed() {
+        const input = document.getElementById('seed-input');
+        const text = input.value.trim();
+        if(!text) return;
+        
+        logSys(`Seed Injected: ${text}`);
+        chatHistory.push({role: "user", parts: [{text: text}]});
+        input.value = "";
+        
+        if(!isAuto) triggerTurn();
+    }
+
+    async function triggerTurn() {
+        if(!apiKey) return logSys("ERR: API KEY MISSING");
+        document.getElementById('sys-status') && document.getElementById('sys-status').remove();
+        logSys("<span class='spinner'></span> Processing NLI turn...");
+        
+        try {
+            const currentSys = turnState === 'alpha' ? alphaSys : betaSys;
+            const context = [...chatHistory];
+            // Enforce alternating roles for API compliance if needed, but standard is just user/model. 
+            // We'll map our internal log to standard gemini format.
+            const apiMessages = context.map(m => ({
+                role: m.role === 'user' ? 'user' : 'model',
+                parts: m.parts
+            }));
+
+            // Force prompt to keep them talking to each other
+            apiMessages.push({role: "user", parts: [{text: `Continue the interpretation. You are ${turnState.toUpperCase()}.`}]});
+
+            const response = await fetchGemini(apiMessages, currentSys);
+            logSys(`Turn Complete.`);
+            
+            if(turnState === 'alpha') {
+                logAgent('Alpha', response);
+                turnState = 'beta';
+            } else {
+                logAgent('Beta', response);
+                turnState = 'alpha';
+            }
+
+            // Remove spinner
+            const spinners = document.querySelectorAll('.spinner');
+            spinners.forEach(s => s.parentNode.remove());
+
+        } catch (e) {
+            logSys(`ERR: ${e.message}`);
+        }
+    }
+
+    function toggleAuto() {
+        isAuto = !isAuto;
+        const btn = document.getElementById('auto-btn');
+        if(isAuto) {
+            btn.style.borderColor = 'var(--neon-amber)';
+            btn.innerText = 'HALT';
+            logSys("Auto-Synthesis Enabled. Inter-agent loop active.");
+            autoLoop();
+        } else {
+            btn.style.borderColor = 'gray';
+            btn.innerText = 'AUTO';
+            logSys("Auto-Synthesis Halted.");
+            clearTimeout(autoInterval);
+        }
+    }
+
+    async function autoLoop() {
+        if(!isAuto) return;
+        await triggerTurn();
+        autoInterval = setTimeout(autoLoop, 8000); // 8 second delay to prevent rapid rate limiting
+    }
+
+    // --- EVOLUTION & BUILDER ---
+    async function evolvePrompt() {
+        if(chatHistory.length < 2) return alert("Need more NLI context to evolve prompt.");
+        const status = document.getElementById('evo-status');
+        status.innerHTML = "<span class='spinner'></span> Synthesizing prompt...";
+        
+        const evoSys = "Analyze the conversation. Extract the core mechanical, physical, and UI concepts discussed. Synthesize them into a single, highly detailed master prompt designed to instruct a master developer to build a single-file HTML/CSS/JS standalone web application. The prompt must demand professional engineering-grade aesthetics, condensed UI, sliding windows, and advanced canvas graphics. Output ONLY the prompt.";
+        
+        const apiMessages = [{
+            role: "user", 
+            parts: [{text: "Here is the conversation context: " + JSON.stringify(chatHistory.map(h=>h.parts[0].text))}]
+        }];
+
+        try {
+            const prompt = await fetchGemini(apiMessages, evoSys);
+            document.getElementById('prompt-output').value = prompt;
+            status.innerText = "Prompt Evolved.";
+        } catch (e) {
+            status.innerText = "Evo Err: " + e.message;
+        }
+    }
+
+    async function compileProgram() {
+        const prompt = document.getElementById('prompt-output').value.trim();
+        if(!prompt) return alert("No prompt to compile.");
+        
+        const status = document.getElementById('render-status');
+        status.innerHTML = "<span class='spinner'></span> COMPILING...";
+        
+        const compilerSys = "You are an elite software architect. Based on the user's prompt, generate a COMPLETE, self-contained HTML file containing all CSS (use Tailwind via CDN) and JavaScript. Ensure high-end engineering aesthetic, dark mode, glassmorphism, and responsive mechanics. DO NOT wrap the output in markdown blocks (like ```html). Output ONLY raw HTML code.";
+
+        try {
+            const htmlCodeText = await fetchGemini([{role: "user", parts:[{text: prompt}]}], compilerSys);
+            
+            // Clean markdown if accidentally included
+            let cleanHtml = htmlCodeText.replace(/^```(html)?\n/, '').replace(/```$/m, '');
+
+            const iframe = document.getElementById('app-preview');
+            iframe.srcdoc = cleanHtml;
+            status.innerHTML = "<span class='text-[var(--neon-amber)]'>ONLINE</span>";
+        } catch (e) {
+            status.innerText = "ERR";
+            alert("Compilation failed: " + e.message);
+        }
+    }
+
+    function clearSystem() {
+        chatHistory = [];
+        document.getElementById('chat-log').innerHTML = '<div class="sys-msg">>> SYSTEM: Cache cleared. Awaiting input seed...</div>';
+        document.getElementById('prompt-output').value = '';
+        document.getElementById('app-preview').srcdoc = '';
+        if(isAuto) toggleAuto();
+    }
+</script>
+</body>
+</html>
+
+```
+
